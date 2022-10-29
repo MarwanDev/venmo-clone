@@ -1,6 +1,11 @@
 import { useEffect, useState, createContext } from "react";
 import { ethers } from "ethers";
 import { contractAddress, contractAbi } from "../utils/constants";
+import TimeAgo from "javascript-time-ago";
+import en from "javascript-time-ago/locale/en";
+TimeAgo.addLocale(en);
+const timeAgo = new TimeAgo("en-US");
+
 export const TransactionContext = createContext();
 const { ethereum } = window;
 const createEthereumContract = () => {
@@ -19,6 +24,7 @@ export const TransactionProvider = ({ children }) => {
   const [amount, setAmount] = useState(0);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [transactions, setTransactions] = useState([]);
   const [transactionCount, setTransactionCount] = useState(
     localStorage.getItem("trasactionCount")
   );
@@ -37,6 +43,7 @@ export const TransactionProvider = ({ children }) => {
       });
       if (accounts.length) {
         setCurrentAccount(accounts[0]);
+        getAllTransactions();
       } else {
         console.log("No Accounts found");
       }
@@ -57,6 +64,35 @@ export const TransactionProvider = ({ children }) => {
     } catch (error) {
       console.log(error);
       throw new Error("No ethereum Object");
+    }
+  };
+
+  const getAllTransactions = async () => {
+    try {
+      if (ethereum) {
+        const transactionContract = createEthereumContract();
+        const availableTransactions =
+          await transactionContract.getAllTransactions();
+
+        const structuredTransactions = availableTransactions.map(
+          (transaction) => ({
+            addressTo: transaction.receiver,
+            addressFrom: transaction.sender,
+            timestamp: timeAgo.format(
+              new Date(transaction.timestamp.toNumber() * 1000),
+              "mini"
+            ),
+            message: transaction.message,
+            amount: parseInt(transaction.amount._hex) / 10 ** 18,
+          })
+        );
+        console.log(structuredTransactions);
+        setTransactions(structuredTransactions);
+      } else {
+        console.log("No ethereum object");
+      }
+    } catch (error) {
+      console.log(error);
     }
   };
 
@@ -106,7 +142,7 @@ export const TransactionProvider = ({ children }) => {
 
         const transactionsCount =
           await transactionContract.getTransactionCount();
-        setTransactionCount(transactionCount.toNumber());
+        setTransactionCount(transactionsCount.toNumber());
         window.location.reload();
       }
     } catch (error) {
@@ -125,6 +161,7 @@ export const TransactionProvider = ({ children }) => {
         amount,
         message,
         setMessage,
+        transactions,
       }}
     >
       {children}
